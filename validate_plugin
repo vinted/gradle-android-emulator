@@ -48,6 +48,7 @@ fi
 
 # Use a google_apis flavor
 if should_run_target 2; then
+    ANDROID_EMULATOR_SDK_VERSION=24 ANDROID_EMULATOR_GOOGLE_APIS=true ./gradlew -p example-android-project assemble
     ANDROID_EMULATOR_SDK_VERSION=24 ANDROID_EMULATOR_GOOGLE_APIS=true ./gradlew -d -p example-android-project connectedCheck
 fi
 
