@@ -11,11 +11,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
+import org.apache.commons.io.IOUtils;
+import java.nio.charset.StandardCharsets;
 
 import com.android.build.gradle.internal.tasks.DeviceProviderInstrumentTestTask;
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.logging.Logger;
 import org.gradle.api.Task;
 import org.gradle.api.tasks.AbstractExecTask;
 import org.gradle.api.tasks.Exec;
@@ -136,7 +139,7 @@ public class AndroidEmulatorPlugin implements Plugin<Project> {
         }
         final ProcessBuilder pb = new ProcessBuilder(command.toArray(new String[0]));
         pb.environment().putAll(emulatorConfiguration.getEnvironmentVariableMap());
-        pb.inheritIO();
+        // pb.inheritIO();
 
         final AtomicReference<Process> process = new AtomicReference<>();
 
@@ -144,7 +147,27 @@ public class AndroidEmulatorPlugin implements Plugin<Project> {
             task.doFirst(t -> {
                 project.getLogger().debug("Starting emulator with command {} {}", pb.environment(), pb.command());
                 try {
-                    process.set(pb.start());
+                    final Process directProcess = pb.start();
+                    process.set(directProcess);
+                    final Logger logger = project.getLogger();
+                    new Thread(() -> {
+                        try {
+                            logger.warn("emu stdout starting");
+                            IOUtils.lineIterator(directProcess.getInputStream(), StandardCharsets.UTF_8).forEachRemaining(s -> logger.warn("emu stdout: " + s));
+                        } catch (IOException e) {
+                            logger.error("Error with stdout", e);
+                        }
+                        logger.warn("emu stdout done");
+                    }).start();
+                    new Thread(() -> {
+                        try {
+                            logger.warn("emu stderr starting");
+                            IOUtils.lineIterator(directProcess.getErrorStream(), StandardCharsets.UTF_8).forEachRemaining(s -> logger.warn("emu stderr: " + s));
+                        } catch (IOException e) {
+                            logger.error("Error with stderr", e);
+                        }
+                        logger.warn("emu stderr done");
+                    }).start();
                     Runtime.getRuntime().addShutdownHook(new Thread(() -> process.getAndUpdate(DESTROY_AND_REPLACE_WITH_NULL)));
                 } catch (final IOException e) {
                     throw new RuntimeException("Emulator failed to start successfully", e);
